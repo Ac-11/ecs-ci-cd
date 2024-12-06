@@ -1,7 +1,7 @@
 {
     "name": "nodejs-app",
     "version": "1.0.0",
-    "description": "A simple static Node.js application",
+    "description": "A simple static Node.js applicatio",
     "main": "server.js",
     "scripts": {
       "start": "node server.js"
