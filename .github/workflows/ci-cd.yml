@@ -30,24 +30,39 @@ jobs:
       # Step 4: Build, tag, and push Docker image to ECR
       - name: Build, tag, and push Docker image
         run: |
-          IMAGE_URI=651706780098.dkr.ecr.us-east-1.amazonaws.com/nodejs-app:${{ github.sha }}
+          IMAGE_URI=651706780098.dkr.ecr.us-east-1.amazonaws.com/nodejs-app:latest
           docker build -t $IMAGE_URI .
           docker push $IMAGE_URI
-          echo "image=$IMAGE_URI" >> $GITHUB_ENV  # Set image URI as an environment variable
 
-      # Step 5: Get current task definition from ECS
-      - name: Get current task definition
+      # Step 5: Register new ECS task definition with the new Docker image
+      - name: Register ECS task definition
+        id: register-task-def
         run: |
-          aws ecs describe-task-definition --task-definition nodejs-task-def > task-definition.json
+          # Get the new image URI
+          IMAGE_URI="651706780098.dkr.ecr.us-east-1.amazonaws.com/nodejs-app:latest"
+          
+          # Get the current ECS task definition
+          ecs_task_def=$(aws ecs describe-task-definition --task-definition nodejs-task-def | jq '.taskDefinition')
+          
+          # Modify the image in the task definition
+          new_task_def=$(echo $ecs_task_def | jq '.containerDefinitions[0].image = "'$IMAGE_URI'"')
+          
+          # Register the new task definition revision
+          new_task_def_arn=$(aws ecs register-task-definition \
+            --family nodejs-task-def \
+            --container-definitions "$new_task_def" \
+            --query 'taskDefinition.taskDefinitionArn' \
+            --output text)
+          
+          echo "New task definition ARN: $new_task_def_arn"
+          
+          # Set output to be used in the next steps
+          echo "::set-output name=task_def_arn::$new_task_def_arn"
 
-      # Step 6: Update ECS task definition with the new image URI
-      - name: Fill in the new image ID in the ECS task definition
-        id: task-def
-        uses: aws-actions/amazon-ecs-render-task-definition@v1
-        with:
-          task-definition: task-definition.json
-          container-name: nodejs-container
-          image: ${{ env.image }}  # Use the image URI from the previous step
+      # Step 6: Show current task definition (Debug Step)
+      - name: Show current task definition
+        run: |
+          cat task-definition.json
 
       # Step 7: Deploy to ECS using CodeDeploy
       - name: Deploy to ECS using CodeDeploy
@@ -58,4 +73,4 @@ jobs:
             --revision file://appspec.yml \
             --deployment-config-name CodeDeployDefault.ECSAllAtOnce \
             --description "Deploy new image to ECS" \
-            --task-definition ${{ steps.task-def.outputs.task-definition }}
+            --task-definition ${{ steps.register-task-def.outputs.task_def_arn }}
