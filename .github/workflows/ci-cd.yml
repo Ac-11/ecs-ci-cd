@@ -44,29 +44,43 @@ jobs:
         id: task-def
         run: |
           IMAGE_URI="651706780098.dkr.ecr.us-east-1.amazonaws.com/nodejs-app:latest"
+          # Update the task definition JSON with the new image URI
           jq '.containerDefinitions[0].image = "'$IMAGE_URI'"' task-definition.json > updated-task-definition.json
-          echo "::set-output name=updated_task_def_file::updated-task-definition.json"
+          echo "::set-output name=updated_task_def_file::updated-task-definition.json"  # Return the file as an output
 
-      # Step 7: Create AppSpec file content
-      - name: Create AppSpec file content
+      # Step 7: Create the AppSpec file content dynamically
+      - name: Create AppSpec content
         id: appspec
         run: |
-          echo 'version: 0.0' > appspec.yml
-          echo 'Resources:' >> appspec.yml
-          echo '  - TargetService:' >> appspec.yml
-          echo '      Type: AWS::ECS::Service' >> appspec.yml
-          echo '      Properties:' >> appspec.yml
-          echo '        TaskDefinition: arn:aws:ecs:us-east-1:651706780098:task-definition/nodejs-task-def:1' >> appspec.yml
-          echo '        LoadBalancerInfo:' >> appspec.yml
-          echo '          ContainerName: nodejs-container' >> appspec.yml
-          echo '          ContainerPort: 3000' >> appspec.yml
-          echo 'Hooks:' >> appspec.yml
-          echo '  BeforeInstall: []' >> appspec.yml
-          echo '  AfterInstall: []' >> appspec.yml
-          echo '  AfterAllowTestTraffic: []' >> appspec.yml
-          echo '  BeforeAllowTraffic: []' >> appspec.yml
-          echo '  AfterAllowTraffic: []' >> appspec.yml
-          echo "::set-output name=appspec_file_content::$(cat appspec.yml)"
+          # Generate the AppSpec content with the updated task definition ARN and other configurations
+          APP_SPEC_CONTENT=$(cat <<EOF
+          {
+            "version": "0.0",
+            "Resources": [
+              {
+                "TargetService": {
+                  "Type": "AWS::ECS::Service",
+                  "Properties": {
+                    "TaskDefinition": "${{ steps.task-def.outputs.updated_task_def_file }}",
+                    "LoadBalancerInfo": {
+                      "ContainerName": "nodejs-container",
+                      "ContainerPort": 3000
+                    }
+                  }
+                }
+              }
+            ],
+            "Hooks": {
+              "BeforeInstall": [],
+              "AfterInstall": [],
+              "AfterAllowTestTraffic": [],
+              "BeforeAllowTraffic": [],
+              "AfterAllowTraffic": []
+            }
+          }
+          EOF
+          )
+          echo "::set-output name=appspec_content::$APP_SPEC_CONTENT"
 
       # Step 8: Deploy to ECS using CodeDeploy
       - name: Deploy to ECS using CodeDeploy
@@ -74,6 +88,6 @@ jobs:
           aws deploy create-deployment \
             --application-name AppECS-Node-js-nodejs-bg \
             --deployment-group-name DgpECS-Node-js-nodejs-bg \
-            --revision "{\"revisionType\":\"AppSpecContent\",\"appSpecContent\":\"${{ steps.appspec.outputs.appspec_file_content }}\"}" \
+            --revision "{\"revisionType\":\"AppSpecContent\",\"appSpecContent\":\"${{ steps.appspec.outputs.appspec_content }}\"}" \
             --deployment-config-name CodeDeployDefault.ECSAllAtOnce \
             --description "Deploy new image to ECS"
