@@ -34,35 +34,21 @@ jobs:
           docker build -t $IMAGE_URI .
           docker push $IMAGE_URI
 
-      # Step 5: Register new ECS task definition with the new Docker image
-      - name: Register ECS task definition
-        id: register-task-def
+      # Step 5: Download the current task definition
+      - name: Download current task definition
         run: |
-          # Get the new image URI
-          IMAGE_URI="651706780098.dkr.ecr.us-east-1.amazonaws.com/nodejs-app:latest"
-          
-          # Get the current ECS task definition
-          ecs_task_def=$(aws ecs describe-task-definition --task-definition nodejs-task-def | jq '.taskDefinition')
-          
-          # Modify the image in the task definition
-          new_task_def=$(echo $ecs_task_def | jq '.containerDefinitions[0].image = "'$IMAGE_URI'"')
-          
-          # Register the new task definition revision
-          new_task_def_arn=$(aws ecs register-task-definition \
-            --family nodejs-task-def \
-            --container-definitions "$new_task_def" \
-            --query 'taskDefinition.taskDefinitionArn' \
-            --output text)
-          
-          echo "New task definition ARN: $new_task_def_arn"
-          
-          # Set output to be used in the next steps
-          echo "::set-output name=task_def_arn::$new_task_def_arn"
+          aws ecs describe-task-definition --task-definition nodejs-task-def --query taskDefinition > task-definition.json
 
-      # Step 6: Show current task definition (Debug Step)
-      - name: Show current task definition
+      # Step 6: Fill in the new image ID in the ECS task definition
+      - name: Update ECS task definition with new image
+        id: task-def
         run: |
-          cat task-definition.json
+          IMAGE_URI="651706780098.dkr.ecr.us-east-1.amazonaws.com/nodejs-app:latest"
+          # Update the task definition JSON with the new image URI
+          jq '.containerDefinitions[0].image = "'$IMAGE_URI'"' task-definition.json > updated-task-definition.json
+          echo "Updated task definition saved to updated-task-definition.json"
+          # Set output to be used in the next steps
+          echo "::set-output name=task_def_file::updated-task-definition.json"
 
       # Step 7: Deploy to ECS using CodeDeploy
       - name: Deploy to ECS using CodeDeploy
@@ -70,7 +56,6 @@ jobs:
           aws deploy create-deployment \
             --application-name AppECS-Node-js-nodejs-bg \
             --deployment-group-name DgpECS-Node-js-nodejs-bg \
-            --revision file://appspec.yml \
+            --revision file://${{ steps.task-def.outputs.task_def_file }} \
             --deployment-config-name CodeDeployDefault.ECSAllAtOnce \
-            --description "Deploy new image to ECS" \
-            --task-definition ${{ steps.register-task-def.outputs.task_def_arn }}
+            --description "Deploy new image to ECS"
