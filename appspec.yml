@@ -1,0 +1,9 @@
+version: 0.0
+Resources:
+  - TargetService:
+      Type: AWS::ECS::Service
+      Properties:
+        TaskDefinition: "${{ steps.register-task-def.outputs.task_def_arn }}"
+        LoadBalancerInfo:
+          ContainerName: "nodejs-container"
+          ContainerPort: 3000
