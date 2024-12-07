@@ -44,18 +44,36 @@ jobs:
         id: task-def
         run: |
           IMAGE_URI="651706780098.dkr.ecr.us-east-1.amazonaws.com/nodejs-app:latest"
-          # Update the task definition JSON with the new image URI
           jq '.containerDefinitions[0].image = "'$IMAGE_URI'"' task-definition.json > updated-task-definition.json
-          echo "Updated task definition saved to updated-task-definition.json"
-          # Set output to be used in the next steps
-          echo "::set-output name=updated_task_def_arn::updated-task-definition.json"  # Return the file as an output
+          echo "::set-output name=updated_task_def_file::updated-task-definition.json"
 
-      # Step 7: Deploy to ECS using CodeDeploy
+      # Step 7: Create AppSpec file content
+      - name: Create AppSpec file content
+        id: appspec
+        run: |
+          echo 'version: 0.0' > appspec.yml
+          echo 'Resources:' >> appspec.yml
+          echo '  - TargetService:' >> appspec.yml
+          echo '      Type: AWS::ECS::Service' >> appspec.yml
+          echo '      Properties:' >> appspec.yml
+          echo '        TaskDefinition: arn:aws:ecs:us-east-1:651706780098:task-definition/nodejs-task-def:1' >> appspec.yml
+          echo '        LoadBalancerInfo:' >> appspec.yml
+          echo '          ContainerName: nodejs-container' >> appspec.yml
+          echo '          ContainerPort: 3000' >> appspec.yml
+          echo 'Hooks:' >> appspec.yml
+          echo '  BeforeInstall: []' >> appspec.yml
+          echo '  AfterInstall: []' >> appspec.yml
+          echo '  AfterAllowTestTraffic: []' >> appspec.yml
+          echo '  BeforeAllowTraffic: []' >> appspec.yml
+          echo '  AfterAllowTraffic: []' >> appspec.yml
+          echo "::set-output name=appspec_file_content::$(cat appspec.yml)"
+
+      # Step 8: Deploy to ECS using CodeDeploy
       - name: Deploy to ECS using CodeDeploy
         run: |
           aws deploy create-deployment \
             --application-name AppECS-Node-js-nodejs-bg \
             --deployment-group-name DgpECS-Node-js-nodejs-bg \
-            --revision file://$GITHUB_WORKSPACE/appspec.yml \
+            --revision "{\"revisionType\":\"AppSpecContent\",\"appSpecContent\":\"${{ steps.appspec.outputs.appspec_file_content }}\"}" \
             --deployment-config-name CodeDeployDefault.ECSAllAtOnce \
             --description "Deploy new image to ECS"
