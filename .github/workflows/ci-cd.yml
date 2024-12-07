@@ -48,46 +48,17 @@ jobs:
           jq '.containerDefinitions[0].image = "'$IMAGE_URI'"' task-definition.json > updated-task-definition.json
           echo "::set-output name=updated_task_def_file::updated-task-definition.json"  # Return the file as an output
 
-      # Step 7: Create the AppSpec file content dynamically
-      - name: Create AppSpec content
-        id: appspec
+      # Step 7: Upload updated ECS task definition to S3
+      - name: Upload updated ECS task definition to S3
         run: |
-          # Generate the AppSpec content with the updated task definition ARN and other configurations
-          APP_SPEC_CONTENT=$(cat <<EOF
-          {
-            "version": "0.0",
-            "Resources": [
-              {
-                "TargetService": {
-                  "Type": "AWS::ECS::Service",
-                  "Properties": {
-                    "TaskDefinition": "${{ steps.task-def.outputs.updated_task_def_file }}",
-                    "LoadBalancerInfo": {
-                      "ContainerName": "nodejs-container",
-                      "ContainerPort": 3000
-                    }
-                  }
-                }
-              }
-            ],
-            "Hooks": {
-              "BeforeInstall": [],
-              "AfterInstall": [],
-              "AfterAllowTestTraffic": [],
-              "BeforeAllowTraffic": [],
-              "AfterAllowTraffic": []
-            }
-          }
-          EOF
-          )
-          echo "::set-output name=appspec_content::$APP_SPEC_CONTENT"
+          aws s3 cp updated-task-definition.json s3://nodejsabhsith/updated-task-definition.json
 
-      # Step 8: Deploy to ECS using CodeDeploy
+      # Step 8: Deploy to ECS using CodeDeploy from S3
       - name: Deploy to ECS using CodeDeploy
         run: |
           aws deploy create-deployment \
             --application-name AppECS-Node-js-nodejs-bg \
             --deployment-group-name DgpECS-Node-js-nodejs-bg \
-            --revision "{\"revisionType\":\"AppSpecContent\",\"appSpecContent\":\"${{ steps.appspec.outputs.appspec_content }}\"}" \
+            --revision "s3://nodejsabhsith/updated-task-definition.json" \
             --deployment-config-name CodeDeployDefault.ECSAllAtOnce \
             --description "Deploy new image to ECS"
