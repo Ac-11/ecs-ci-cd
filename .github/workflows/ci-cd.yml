@@ -56,6 +56,6 @@ jobs:
           aws deploy create-deployment \
             --application-name AppECS-Node-js-nodejs-bg \
             --deployment-group-name DgpECS-Node-js-nodejs-bg \
-            --revision file://appspec.yml \
+            --revision file://$GITHUB_WORKSPACE/appspec.yml \
             --deployment-config-name CodeDeployDefault.ECSAllAtOnce \
             --description "Deploy new image to ECS"
