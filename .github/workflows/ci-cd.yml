@@ -48,24 +48,9 @@ jobs:
           jq '.containerDefinitions[0].image = "'$IMAGE_URI'"' task-definition.json > updated-task-definition.json
           echo "Updated task definition saved to updated-task-definition.json"
           # Set output to be used in the next steps
-          echo "::set-output name=task_def_file::updated-task-definition.json"
+          echo "::set-output name=updated_task_def_arn::updated-task-definition.json"  # Return the file as an output
 
-      # # Step 7: Register the updated ECS task definition
-      # - name: Register updated ECS task definition
-      #   id: register-task-def
-      #   run: |
-      #     # Register the updated task definition and capture the ARN
-      #     new_task_def_arn=$(aws ecs register-task-definition \
-      #       --family nodejs-task-def \
-      #       --container-definitions file://${{ steps.task-def.outputs.task_def_file }} \
-      #       --query 'taskDefinition.taskDefinitionArn' \
-      #       --output text)
-          
-      #     echo "New task definition ARN: $new_task_def_arn"
-      #     # Set output to be used in the next steps
-      #     echo "::set-output name=task_def_arn::$new_task_def_arn"
-
-      # Step 8: Deploy to ECS using CodeDeploy
+      # Step 7: Deploy to ECS using CodeDeploy
       - name: Deploy to ECS using CodeDeploy
         run: |
           aws deploy create-deployment \

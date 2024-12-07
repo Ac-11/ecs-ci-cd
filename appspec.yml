@@ -3,7 +3,7 @@ Resources:
   - TargetService:
       Type: AWS::ECS::Service
       Properties:
-        TaskDefinition: "arn:aws:ecs:us-east-1:651706780098:task-definition/nodejs-task-def:3"
+        TaskDefinition: "${{ steps.task-def.outputs.updated_task_def_arn }}"  # Updated ARN
         LoadBalancerInfo:
           ContainerName: "nodejs-container"
           ContainerPort: 3000
