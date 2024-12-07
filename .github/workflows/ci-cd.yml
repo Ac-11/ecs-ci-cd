@@ -30,28 +30,32 @@ jobs:
       # Step 4: Build, tag, and push Docker image to ECR
       - name: Build, tag, and push Docker image
         run: |
-          IMAGE_URI=651706780098.dkr.ecr.us-east-1.amazonaws.com/nodejs-app:latest
+          IMAGE_URI=651706780098.dkr.ecr.us-east-1.amazonaws.com/nodejs-app:${{ github.sha }}
           docker build -t $IMAGE_URI .
           docker push $IMAGE_URI
-          echo "image=$IMAGE_URI" >> $GITHUB_ENV  # Set image as environment variable
+          echo "image=$IMAGE_URI" >> $GITHUB_ENV  # Set image URI as an environment variable
 
-      # Step 5: Update ECS task definition with new image URI
+      # Step 5: Get current task definition from ECS
+      - name: Get current task definition
+        run: |
+          aws ecs describe-task-definition --task-definition nodejs-task-def > task-definition.json
+
+      # Step 6: Update ECS task definition with the new image URI
       - name: Fill in the new image ID in the ECS task definition
         id: task-def
         uses: aws-actions/amazon-ecs-render-task-definition@v1
         with:
           task-definition: task-definition.json
           container-name: nodejs-container
-          image: ${{ env.image }}
+          image: ${{ env.image }}  # Use the image URI from the previous step
 
-      # Step 6: Deploy new task definition to ECS using CodeDeploy
+      # Step 7: Deploy to ECS using CodeDeploy
       - name: Deploy to ECS using CodeDeploy
-        uses: aws-actions/amazon-ecs-deploy-task-definition@v2
-        with:
-          task-definition: ${{ steps.task-def.outputs.task-definition }}
-          service: nodejs-service
-          cluster: nodejs-cluster
-          wait-for-service-stability: true
-          codedeploy-appspec: appspec.yml
-          codedeploy-application: AppECS-Node-js-nodejs-bg
-          codedeploy-deployment-group: DgpECS-Node-js-nodejs-bg
+        run: |
+          aws deploy create-deployment \
+            --application-name AppECS-Node-js-nodejs-bg \
+            --deployment-group-name DgpECS-Node-js-nodejs-bg \
+            --revision file://appspec.yml \
+            --deployment-config-name CodeDeployDefault.ECSAllAtOnce \
+            --description "Deploy new image to ECS" \
+            --task-definition ${{ steps.task-def.outputs.task-definition }}
