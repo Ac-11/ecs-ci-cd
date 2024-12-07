@@ -50,20 +50,20 @@ jobs:
           # Set output to be used in the next steps
           echo "::set-output name=task_def_file::updated-task-definition.json"
 
-      # Step 7: Register the updated ECS task definition
-      - name: Register updated ECS task definition
-        id: register-task-def
-        run: |
-          # Register the updated task definition and capture the ARN
-          new_task_def_arn=$(aws ecs register-task-definition \
-            --family nodejs-task-def \
-            --container-definitions file://${{ steps.task-def.outputs.task_def_file }} \
-            --query 'taskDefinition.taskDefinitionArn' \
-            --output text)
+      # # Step 7: Register the updated ECS task definition
+      # - name: Register updated ECS task definition
+      #   id: register-task-def
+      #   run: |
+      #     # Register the updated task definition and capture the ARN
+      #     new_task_def_arn=$(aws ecs register-task-definition \
+      #       --family nodejs-task-def \
+      #       --container-definitions file://${{ steps.task-def.outputs.task_def_file }} \
+      #       --query 'taskDefinition.taskDefinitionArn' \
+      #       --output text)
           
-          echo "New task definition ARN: $new_task_def_arn"
-          # Set output to be used in the next steps
-          echo "::set-output name=task_def_arn::$new_task_def_arn"
+      #     echo "New task definition ARN: $new_task_def_arn"
+      #     # Set output to be used in the next steps
+      #     echo "::set-output name=task_def_arn::$new_task_def_arn"
 
       # Step 8: Deploy to ECS using CodeDeploy
       - name: Deploy to ECS using CodeDeploy
@@ -71,6 +71,6 @@ jobs:
           aws deploy create-deployment \
             --application-name AppECS-Node-js-nodejs-bg \
             --deployment-group-name DgpECS-Node-js-nodejs-bg \
-            --revision "{"revisionType":"AppSpecContent","appSpecContent":"{\"taskDefinitionArn\":\"${{ steps.register-task-def.outputs.task_def_arn }}\"}"}" \
+            --revision file://appspec.yml \
             --deployment-config-name CodeDeployDefault.ECSAllAtOnce \
             --description "Deploy new image to ECS"
