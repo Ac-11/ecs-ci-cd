@@ -41,8 +41,10 @@ jobs:
           # Get the new image URI
           IMAGE_URI="651706780098.dkr.ecr.us-east-1.amazonaws.com/nodejs-app:latest"
           
-          # Create a new ECS task definition JSON based on the current task definition
-          ecs_task_def=$(aws ecs describe-task-definition --task-definition nodejs-task-def | jq '.taskDefinition' )
+          # Get the current ECS task definition
+          ecs_task_def=$(aws ecs describe-task-definition --task-definition nodejs-task-def | jq '.taskDefinition')
+          
+          # Modify the image in the task definition
           new_task_def=$(echo $ecs_task_def | jq '.containerDefinitions[0].image = "'$IMAGE_URI'"')
           
           # Register the new task definition revision
@@ -57,7 +59,7 @@ jobs:
           # Set output to be used in the next steps
           echo "::set-output name=task_def_arn::$new_task_def_arn"
 
-      # Step 6: Create CodeDeploy deployment using the updated task definition
+      # Step 6: Deploy to ECS using CodeDeploy
       - name: Deploy to ECS using CodeDeploy
         run: |
           aws deploy create-deployment \
@@ -65,4 +67,5 @@ jobs:
             --deployment-group-name DgpECS-Node-js-nodejs-bg \
             --revision file://appspec.yml \
             --deployment-config-name CodeDeployDefault.ECSAllAtOnce \
-            --description "Deploy new image to ECS"
+            --description "Deploy new image to ECS" \
+            --task-definition ${{ steps.register-task-def.outputs.task_def_arn }}
