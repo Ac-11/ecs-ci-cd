@@ -1,13 +1,14 @@
 {
-    "name": "nodejs-app",
-    "version": "1.0.0",
-    "description": "A simple static Node.js applicatio",
-    "main": "server.js",
-    "scripts": {
-      "start": "node server.js"
-    },
-    "dependencies": {
-      "express": "^4.18.2"
-    }
+  "name": "nodejs-app",
+  "version": "1.0.0",
+  "description": "A simple static Node.js application",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "build": "npm install"
+  },
+  "dependencies": {
+    "express": "^4.18.2",
+    "cors": "^2.8.5"
   }
-  
+}

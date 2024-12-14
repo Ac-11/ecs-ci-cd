@@ -1,16 +1,18 @@
-const express = require("express");
-const path = require("path");
-
+const express = require('express');
+const cors = require('cors');
 const app = express();
+
 const PORT = process.env.PORT || 3000;
 
-// Serve static files from the "public" directory
-app.use(express.static(path.join(__dirname, "public")));
+// Enable CORS to allow requests from the front-end
+app.use(cors());
 
-app.get("/", (req, res) => {
-  res.sendFile(path.join(__dirname, "public", "index.html"));
+// Define a simple API endpoint
+app.get('/', (req, res) => {
+  res.json({ message: 'Hello from the ECS Fargate backend!' });
 });
 
+// Start the server
 app.listen(PORT, () => {
   console.log(`Server is running on http://localhost:${PORT}`);
 });
