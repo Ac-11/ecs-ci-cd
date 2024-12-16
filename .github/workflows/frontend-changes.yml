@@ -1,0 +1,58 @@
+name: S3 and CloudFront Update
+
+on:
+  push:
+    paths:
+      - 'frontend/index.html'  # Trigger only when index.html changes in frontend directory
+    branches:
+      - main
+
+permissions:
+  id-token: write
+  contents: read
+
+jobs:
+  update-s3-cloudfront:
+    runs-on: ubuntu-latest
+    env:
+      AWS_REGION: us-east-2
+      S3_BUCKET: nodejs-frontend-abhisth
+      CLOUDFRONT_DISTRIBUTION_ID: ET3G5V79QW5ID
+
+    steps:
+      # Step 1: Checkout Code
+      - name: Checkout Code
+        uses: actions/checkout@v3
+
+      # Step 2: Configure AWS Credentials
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v3
+        with:
+          role-to-assume: arn:aws:iam::651706780098:role/GitHubAction-AssumeRole
+          role-session-name: GitHub_to_AWS_via_FederatedOIDC
+          aws-region: ${{ env.AWS_REGION }}
+
+      # Step 3: Rename Existing index.html in S3
+      - name: Rename existing index.html in S3
+        run: |
+          TIMESTAMP=$(date +%s)
+          if aws s3 ls "s3://${{ env.S3_BUCKET }}/index.html"; then
+            COUNT=$(aws s3 ls s3://${{ env.S3_BUCKET }} | grep "record-" | wc -l)
+            NEW_RECORD="record-$(($COUNT + 1)).html"
+            echo "Renaming current index.html to $NEW_RECORD"
+            aws s3 mv s3://${{ env.S3_BUCKET }}/index.html s3://${{ env.S3_BUCKET }}/$NEW_RECORD
+          else
+            echo "No existing index.html found. Skipping rename step."
+          fi
+
+      # Step 4: Upload New index.html to S3
+      - name: Upload New index.html to S3
+        run: |
+          aws s3 cp frontend/index.html s3://${{ env.S3_BUCKET }}/index.html
+          echo "Uploaded new index.html to S3 bucket ${{ env.S3_BUCKET }}"
+
+      # Step 5: Invalidate CloudFront Cache
+      - name: Invalidate CloudFront Cache
+        run: |
+          echo "Invalidating CloudFront distribution: ${{ env.CLOUDFRONT_DISTRIBUTION_ID }}"
+          aws cloudfront create-invalidation --distribution-id ${{ env.CLOUDFRONT_DISTRIBUTION_ID }} --paths "/*"
