@@ -5,7 +5,7 @@ on:
     paths:
       - 'frontend/index.html'  # Trigger only when index.html changes in frontend directory
     branches:
-      - main
+      - dev
 
 permissions:
   id-token: write
