@@ -1,0 +1,9 @@
+version: 0.0
+Resources:
+  - TargetService:
+      Type: AWS::ECS::Service
+      Properties:
+        TaskDefinition: "arn:aws:ecs:us-east-1:651706780098:task-definition/nodejs-task-def:18"  # Updated ARN
+        LoadBalancerInfo:
+          ContainerName: "nodejs-container"
+          ContainerPort: 3000
