@@ -9,7 +9,7 @@ app.use(cors());
 
 // Define a simple API endpoint
 app.get('/', (req, res) => {
-  res.json({ message: 'Hello from the ECS Fargate backend-latest!' });
+  res.json({ message: 'Hello from the ECS Fargate backend!' });
 });
 
 // Start the server

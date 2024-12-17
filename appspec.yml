@@ -3,7 +3,7 @@ Resources:
   - TargetService:
       Type: AWS::ECS::Service
       Properties:
-        TaskDefinition: "arn:aws:ecs:us-east-1:651706780098:task-definition/nodejs-task-def:18"  # Updated ARN
+        TaskDefinition: ""  # Updated ARN will go to the S3 bucket.
         LoadBalancerInfo:
           ContainerName: "nodejs-container"
           ContainerPort: 3000
