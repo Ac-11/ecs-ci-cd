@@ -1,3 +1,76 @@
+# name: CI/CD Pipeline for Node.js App
+
+# on:
+#   push:
+#     branches:
+#       - dev
+
+#     paths-ignore:
+#       - 'frontend/**' 
+
+# permissions:
+#   id-token: write   # This is required for requesting the JWT
+#   contents: read    # This is required for actions/checkout
+
+# jobs:
+#   build-and-deploy:
+#     runs-on: ubuntu-latest
+#     env:
+#       AWS_REGION: us-east-1  # Ensure this matches your AWS region
+
+#     steps:
+#       # Step 1: Checkout the code
+#       - name: Checkout code
+#         uses: actions/checkout@v3
+
+#       # Step 2: Set up AWS CLI to use IAM Role
+#       - name: Configure AWS credentials
+#         uses: aws-actions/configure-aws-credentials@v3
+#         with:
+#           role-to-assume: arn:aws:iam::651706780098:role/GitHubAction-AssumeRole
+#           role-session-name: GitHub_to_AWS_via_FederatedOIDC
+#           aws-region: ${{ env.AWS_REGION }}
+
+#       # Step 3: Log in to Amazon ECR
+#       - name: Log in to Amazon ECR
+#         id: login-ecr
+#         uses: aws-actions/amazon-ecr-login@v2
+
+#       # Step 4: Build, tag, and push Docker image to ECR
+#       - name: Build, tag, and push Docker image
+#         run: |
+#           IMAGE_URI=651706780098.dkr.ecr.us-east-1.amazonaws.com/nodejs-app:latest
+#           docker build -t $IMAGE_URI .
+#           docker push $IMAGE_URI
+
+#       # Step 5: Download the current task definition
+#       - name: Download current task definition
+#         run: |
+#           aws ecs describe-task-definition --task-definition nodejs-task-def --query taskDefinition > task-definition.json
+
+#       # Step 6: Fill in the new image ID in the ECS task definition
+#       - name: Update ECS task definition with new image
+#         id: task-def
+#         run: |
+#           IMAGE_URI="651706780098.dkr.ecr.us-east-1.amazonaws.com/nodejs-app:latest"
+#           # Update the task definition JSON with the new image URI
+#           jq '.containerDefinitions[0].image = "'$IMAGE_URI'"' task-definition.json > updated-task-definition.json
+#           echo "::set-output name=updated_task_def_file::updated-task-definition.json"
+
+#       # Step 7: Upload updated ECS task definition to S3
+#       - name: Upload updated ECS task definition to S3
+#         run: |
+#           aws s3 cp updated-task-definition.json s3://nodejsabhsith/updated-task-definition.json
+
+#       # Step 8: Deploy to ECS using CodeDeploy
+#       - name: Deploy to ECS using CodeDeploy
+#         run: |
+#           aws deploy create-deployment \
+#             --application-name AppECS-Node-js-nodejs-bg \
+#             --deployment-group-name DgpECS-Node-js-nodejs-bg \
+#             --revision "revisionType=S3,s3Location={bucket=nodejsabhsith,key=appspec.yml,bundleType=YAML}" \
+#             --deployment-config-name CodeDeployDefault.ECSAllAtOnce \
+#             --description "Deploy new image to ECS"
 name: CI/CD Pipeline for Node.js App
 
 on:
@@ -5,29 +78,31 @@ on:
     branches:
       - dev
 
-    paths-ignore:
-      - 'frontend/**' 
-
 permissions:
-  id-token: write   # This is required for requesting the JWT
-  contents: read    # This is required for actions/checkout
+  id-token: write   # Required for requesting the JWT
+  contents: read    # Required for actions/checkout
 
 jobs:
   build-and-deploy:
     runs-on: ubuntu-latest
     env:
       AWS_REGION: us-east-1  # Ensure this matches your AWS region
+      AWS_ACCOUNT_ID: 651706780098  # Replace with your AWS account ID
+      ECR_REPOSITORY: nodejs-app
+      ECS_CLUSTER: nodejs-cluster  # Replace with your ECS cluster name
+      ECS_SERVICE: nodejs-service  # Replace with your ECS service name
+      TASK_FAMILY: nodejs-task-def # Task definition family name
 
     steps:
       # Step 1: Checkout the code
       - name: Checkout code
         uses: actions/checkout@v3
 
-      # Step 2: Set up AWS CLI to use IAM Role
+      # Step 2: Configure AWS CLI with OIDC
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v3
         with:
-          role-to-assume: arn:aws:iam::651706780098:role/GitHubAction-AssumeRole
+          role-to-assume: arn:aws:iam::${{ env.AWS_ACCOUNT_ID }}:role/GitHubAction-AssumeRole
           role-session-name: GitHub_to_AWS_via_FederatedOIDC
           aws-region: ${{ env.AWS_REGION }}
 
@@ -38,36 +113,42 @@ jobs:
 
       # Step 4: Build, tag, and push Docker image to ECR
       - name: Build, tag, and push Docker image
+        env:
+          IMAGE_TAG: latest
         run: |
-          IMAGE_URI=651706780098.dkr.ecr.us-east-1.amazonaws.com/nodejs-app:latest
+          IMAGE_URI=${{ env.AWS_ACCOUNT_ID }}.dkr.ecr.${{ env.AWS_REGION }}.amazonaws.com/${{ env.ECR_REPOSITORY }}:${{ env.IMAGE_TAG }}
           docker build -t $IMAGE_URI .
           docker push $IMAGE_URI
+          echo "IMAGE_URI=$IMAGE_URI" >> $GITHUB_ENV
 
-      # Step 5: Download the current task definition
-      - name: Download current task definition
+      # Step 5: Register new ECS task definition revision
+      - name: Register new task definition revision
+        id: register-task
         run: |
-          aws ecs describe-task-definition --task-definition nodejs-task-def --query taskDefinition > task-definition.json
+          # Get the current task definition JSON
+          aws ecs describe-task-definition --task-definition ${{ env.TASK_FAMILY }} --query taskDefinition > task-definition.json
 
-      # Step 6: Fill in the new image ID in the ECS task definition
-      - name: Update ECS task definition with new image
-        id: task-def
-        run: |
-          IMAGE_URI="651706780098.dkr.ecr.us-east-1.amazonaws.com/nodejs-app:latest"
-          # Update the task definition JSON with the new image URI
-          jq '.containerDefinitions[0].image = "'$IMAGE_URI'"' task-definition.json > updated-task-definition.json
-          echo "::set-output name=updated_task_def_file::updated-task-definition.json"
+          # Strip unwanted fields and prepare the new task definition
+          jq 'del(
+            .taskDefinitionArn,
+            .revision,
+            .status,
+            .requiresAttributes,
+            .compatibilities,
+            .registeredAt,
+            .registeredBy
+          ) | .containerDefinitions[0].image = "${{ env.IMAGE_URI }}"' task-definition.json > new-task-definition.json
 
-      # Step 7: Upload updated ECS task definition to S3
-      - name: Upload updated ECS task definition to S3
-        run: |
-          aws s3 cp updated-task-definition.json s3://nodejsabhsith/updated-task-definition.json
+          # Register the updated task definition
+          NEW_TASK_DEF_ARN=$(aws ecs register-task-definition --cli-input-json file://new-task-definition.json --query taskDefinition.taskDefinitionArn --output text)
+          echo "NEW_TASK_DEF_ARN=$NEW_TASK_DEF_ARN" >> $GITHUB_ENV
+          echo "::set-output name=task_def_arn::$NEW_TASK_DEF_ARN"
 
-      # Step 8: Deploy to ECS using CodeDeploy
-      - name: Deploy to ECS using CodeDeploy
+      # Step 6: Update ECS service with new task definition
+      - name: Update ECS service
         run: |
-          aws deploy create-deployment \
-            --application-name AppECS-Node-js-nodejs-bg \
-            --deployment-group-name DgpECS-Node-js-nodejs-bg \
-            --revision "revisionType=S3,s3Location={bucket=nodejsabhsith,key=appspec.yml,bundleType=YAML}" \
-            --deployment-config-name CodeDeployDefault.ECSAllAtOnce \
-            --description "Deploy new image to ECS"
+          aws ecs update-service \
+            --cluster ${{ env.ECS_CLUSTER }} \
+            --service ${{ env.ECS_SERVICE }} \
+            --task-definition ${{ steps.register-task.outputs.task_def_arn }} \
+            --force-new-deployment
