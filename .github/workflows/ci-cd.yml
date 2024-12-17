@@ -62,7 +62,7 @@
 #         run: |
 #           aws s3 cp updated-task-definition.json s3://nodejsabhsith/updated-task-definition.json
 
-#       # Step 8: Deploy to ECS using CodeDeploy
+      # Step 8: Deploy to ECS using CodeDeploy
 #       - name: Deploy to ECS using CodeDeploy
 #         run: |
 #           aws deploy create-deployment \
@@ -71,6 +71,8 @@
 #             --revision "revisionType=S3,s3Location={bucket=nodejsabhsith,key=appspec.yml,bundleType=YAML}" \
 #             --deployment-config-name CodeDeployDefault.ECSAllAtOnce \
 #             --description "Deploy new image to ECS"
+# name: CI/CD Pipeline for Node.js App
+
 name: CI/CD Pipeline for Node.js App
 
 on:
@@ -144,11 +146,26 @@ jobs:
           echo "NEW_TASK_DEF_ARN=$NEW_TASK_DEF_ARN" >> $GITHUB_ENV
           echo "::set-output name=task_def_arn::$NEW_TASK_DEF_ARN"
 
-      # Step 6: Update ECS service with new task definition
-      - name: Update ECS service
+       # Step 6: Update appspec.yml with the latest task definition ARN and upload to S3
+      - name: Update appspec.yml with new task definition ARN
         run: |
-          aws ecs update-service \
-            --cluster ${{ env.ECS_CLUSTER }} \
-            --service ${{ env.ECS_SERVICE }} \
-            --task-definition ${{ steps.register-task.outputs.task_def_arn }} \
-            --force-new-deployment
+          # Replace the hardcoded TaskDefinition ARN in the appspec.yml file
+          NEW_TASK_DEF_ARN=${{ env.NEW_TASK_DEF_ARN }}
+          sed -i "s|TaskDefinition:.*|TaskDefinition: \"$NEW_TASK_DEF_ARN\"|" appspec.yml
+          
+          # Verify the updated appspec.yml
+          cat appspec.yml
+          
+          # Upload the updated appspec.yml to S3
+          aws s3 cp appspec.yml s3://nodejsabhsith/appspec.yml        
+
+      #Step 7: Trigger Code deploy
+      - name: Deploy to ECS using CodeDeploy
+        run: |
+          aws deploy create-deployment \
+            --application-name AppECS-Node-js-nodejs-bg \
+            --deployment-group-name DgpECS-Node-js-nodejs-bg \
+            --revision "revisionType=S3,s3Location={bucket=nodejsabhsith,key=appspec.yml,bundleType=YAML}" \
+            --deployment-config-name CodeDeployDefault.ECSAllAtOnce \
+            --description "Deploy new image to ECS"
+
