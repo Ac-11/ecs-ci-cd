@@ -18,7 +18,7 @@ app.use((req, res, next) => {
 app.get('/', (req, res) => {
   const currentTime = new Date().toISOString();
   console.log(`[${currentTime}] Responding to root endpoint`);
-  res.json({ message: 'Hello from the ECS Fargate backend Final-Imaops!' });
+  res.json({ message: 'Hello from the ECS Fargate backend Final!' });
 });
 
 // Start the server
